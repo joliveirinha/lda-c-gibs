@@ -3,7 +3,9 @@ set(LIBAMIDALA_SOURCES amidala.c
                        lda_model.c 
                        lda_inference.c
                        lda_estimate.c 
-                       corpus.c)
+                       corpus.c
+                       utils.c
+)
 
 set(AMIDALA_APP_SOURCES main.c)
 
