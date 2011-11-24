@@ -4,6 +4,8 @@ set(CMAKE_C_FLAGS "-Wall -g")
 # library 
 set(LIBAMIDALA_SOURCES corpus.c
                        lda.c 
+                       cokus.c
+                       distributions.c
                        utils.c
                        libamidala.c
 )
