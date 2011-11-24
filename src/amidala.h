@@ -8,7 +8,8 @@
 
 #define MAX(a, b) (a > b ? a : b )
 
-lda_model_t* amidala_lda(int k, double alpha, int iterations, corpus_t *c);
+lda_model_t* amidala_lda(int k, double alpha, double beta, 
+                         int iterations, corpus_t *c);
 
 
 #endif
