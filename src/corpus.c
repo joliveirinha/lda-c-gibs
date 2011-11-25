@@ -42,7 +42,7 @@ corpus_t* corpus_read_data(char *filename)
     corpus->docs[ndocs].total = 0;
     
     corpus->docs[ndocs].words = malloc(sizeof(word_t) * length);
-
+    
     for (i=0;i<length;i++) 
     {
       fscanf(infile, "%10d:%10d", &wid, &count);
@@ -50,14 +50,15 @@ corpus_t* corpus_read_data(char *filename)
       corpus->docs[ndocs].words[i].count = count;
       corpus->docs[ndocs].total += count;
 
-      nterms = MAX(wid, nterms+1);
+      nterms = MAX(wid+1, nterms);
     }
 
     ndocs++;
   }
 
   corpus->num_docs = ndocs;
-  
+  corpus->num_terms = nterms;
+
   fclose(infile);
   
   return corpus;
