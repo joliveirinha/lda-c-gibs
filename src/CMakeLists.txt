@@ -6,6 +6,7 @@ set(LIBAMIDALA_SOURCES corpus.c
                        lda.c 
                        cokus.c
                        distributions.c
+                       dirichlet.c
                        utils.c
                        libamidala.c
 )

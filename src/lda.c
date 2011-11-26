@@ -5,6 +5,7 @@
 #include "lda.h"
 #include "utils.h"
 #include "distributions.h"
+#include "dirichlet.h"
 
 
 /*
@@ -77,10 +78,18 @@ static void lda_destroy_suffstats(lda_suffstats_t *stats)
 
 static double lda_loglikelihood(lda_model_t *model, lda_suffstats_t *stats)
 {
+  int i;
   double result = 0;
 
-  // compute the likelihood of the model
-  result = random_uniform()*100000;
+  for (i=0;model->num_topics;i++)
+  {
+    result += log_gamma(41);
+  }
+
+  for (i=0;stats->num_docs;i++)
+  {
+
+  }
 
   return result;
 }
@@ -92,8 +101,8 @@ static void lda_gibbs_sampling(lda_model_t *model, corpus_t *c,
   int i, j, k, l, p;
   int word, z, word_index;
   double oldLogLikelihood, newLogLikelihood;
+  double sum;
 
-  // TODO: Remove this
   double local_z[model->num_topics];
 
   lda_suffstats_t *stats = lda_create_suffstats(model, c);
@@ -162,8 +171,8 @@ static void lda_gibbs_sampling(lda_model_t *model, corpus_t *c,
           stats->ndz[j][z]--;
           stats->nzw[z][word]--;
           
-          double sum = 0;
           // now model the conditional probability of z=k 
+          sum = 0;
           for (k=0;k<model->num_topics;k++) 
           {
             local_z[k] = (stats->ndz[j][k] + model->alpha) *
@@ -172,16 +181,12 @@ static void lda_gibbs_sampling(lda_model_t *model, corpus_t *c,
             sum += local_z[k];
           }
 
-          for (k=0;k<model->num_topics;k++)
-            local_z[k] /= sum;
-
           /* sample a new topic for this word from the new distribution
            * and update the new stats with this new topic
            */
           
           // sample new topic
-          z = random_multinomial(local_z, 
-                                 model->num_topics);
+          z = random_multinomial(local_z, model->num_topics, sum);
 
           stats->nz[z]++;
           stats->ndz[j][z]++;

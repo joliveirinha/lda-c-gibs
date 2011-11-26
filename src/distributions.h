@@ -2,6 +2,6 @@
 #define DISTRIBUTIONS_H
 
 double random_uniform();
-int random_multinomial(double *p, int n);
+int random_multinomial(double *p, int n, double sum);
 
 #endif

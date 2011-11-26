@@ -4,6 +4,9 @@
 #include "utils.h"
 
 
+/*
+ * program behaviour utils functions
+ */
 void die(const char *message)
 {
   fprintf(stderr, "%s\n", message);
