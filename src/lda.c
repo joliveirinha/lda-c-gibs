@@ -14,8 +14,9 @@
 static lda_suffstats_t* lda_create_suffstats(lda_model_t *m, corpus_t *c) 
 {
   int i;
+  
 
-  lda_suffstats_t *stats = malloc(sizeof(lda_suffstats_t *));
+  lda_suffstats_t *stats = malloc(sizeof(lda_suffstats_t));
   if (stats==NULL)
     die("Error allocating memory creating lda sufficient statistics!");
   
@@ -108,7 +109,6 @@ static void lda_gibbs_sampling(lda_model_t *model, corpus_t *c,
       word = c->docs[i].words[j].id;
 
       for (k=0;k<c->docs[i].words[j].count;k++) {
-        
         z = (int) (random_uniform() * model->num_topics);
         stats->topic[i][word_index] = z;
         
@@ -151,26 +151,29 @@ static void lda_gibbs_sampling(lda_model_t *model, corpus_t *c,
       {
         // we need to do this for every repetition 
         // of the word
-        
         word = c->docs[j].words[l].id;
         for (p=0;p<c->docs[j].words[l].count;p++) 
         {
 
           z = stats->topic[j][word_index];
-          
           // remove this topic assigment from the statistics and model 
           // the new probability
           stats->nz[z]--;
           stats->ndz[j][z]--;
           stats->nzw[z][word]--;
           
+          double sum = 0;
           // now model the conditional probability of z=k 
           for (k=0;k<model->num_topics;k++) 
           {
             local_z[k] = (stats->ndz[j][k] + model->alpha) *
-                        ((stats->nzw[k][word] + model->beta)/
+                        ((stats->nzw[k][word] + model->beta) /
                         (stats->nz[k]+model->beta*model->num_terms));
+            sum += local_z[k];
           }
+
+          for (k=0;k<model->num_topics;k++)
+            local_z[k] /= sum;
 
           /* sample a new topic for this word from the new distribution
            * and update the new stats with this new topic
@@ -180,7 +183,6 @@ static void lda_gibbs_sampling(lda_model_t *model, corpus_t *c,
           z = random_multinomial(local_z, 
                                  model->num_topics);
 
-          printf("%d\n", z);
           stats->nz[z]++;
           stats->ndz[j][z]++;
           stats->nzw[z][word]++;
@@ -189,7 +191,7 @@ static void lda_gibbs_sampling(lda_model_t *model, corpus_t *c,
           // memory
           word_index++;
         }
-      } 
+      }
     }
   }
 
@@ -217,7 +219,7 @@ lda_model_t* lda_create(int ntopics, double alpha, double beta, corpus_t *c)
   if (m->log_prob_w==NULL)
     die("Error allocating memory creating LDA model probs!");
 
-  for (i=0;i<m->num_topics;i++)
+  for (i=0;i<m->num_terms;i++)
   {
     m->log_prob_w[i] = malloc(sizeof(double) * m->num_topics);
     if (m->log_prob_w[i] == NULL)
@@ -231,7 +233,7 @@ void lda_destroy(lda_model_t *model)
 {
   int i;
 
-  for (i=0;i<model->num_topics;i++)
+  for (i=0;i<model->num_terms;i++)
     free(model->log_prob_w[i]);
 
   free(model->log_prob_w);
