@@ -76,22 +76,51 @@ static void lda_destroy_suffstats(lda_suffstats_t *stats)
  * Auxiliary functions for this module
  */
 
-static double lda_loglikelihood(lda_model_t *model, lda_suffstats_t *stats)
+static double lda_loglikelihood(lda_model_t *model, lda_suffstats_t *stats,
+                                corpus_t *c)
 {
-  int i;
-  double result = 0;
+  int i, j;
+  double lik = 0;
+  int nonZeroTypeTopics = 0;
 
-  for (i=0;model->num_topics;i++)
+  // direchlet of the documents 
+  for (i=0;i<c->num_docs;i++)
   {
-    result += log_gamma(41);
+    for (j=0;j<model->num_topics;j++) 
+    {
+      if (stats->ndz[i][j] == 0)
+        continue;
+
+      lik += log_gamma(model->alpha * stats->ndz[i][j]) -
+             log_gamma(model->alpha);
+      
+    }
+    
+    lik -= log_gamma(model->alpha*model->num_topics + c->docs[i].total);
   }
 
-  for (i=0;stats->num_docs;i++)
+  printf("%lf\n", lik);
+  lik += stats->num_docs * log_gamma(model->alpha*model->num_topics);
+  
+
+  // direchlet of the topics 
+  for (i=0;i<model->num_topics;i++)
   {
+    for (j=0;j<model->num_terms;j++) 
+    {
+      if (stats->nzw[i][j]==0)
+        continue;
 
+      nonZeroTypeTopics++;
+      lik += log_gamma(model->beta + stats->nzw[i][j]);
+    }
+
+    lik -= log_gamma(model->beta*model->num_topics + stats->nz[i]);
   }
-
-  return result;
+  lik += log_gamma(model->beta * model->num_topics) - 
+         log_gamma(model->beta) * nonZeroTypeTopics;
+  
+  return lik;
 }
 
 static void lda_gibbs_sampling(lda_model_t *model, corpus_t *c, 
@@ -138,10 +167,10 @@ static void lda_gibbs_sampling(lda_model_t *model, corpus_t *c,
   {
     if (interval>=0 && i % interval==0)
     {
-      newLogLikelihood = lda_loglikelihood(model, stats);
+      newLogLikelihood = lda_loglikelihood(model, stats, c);
 
       printf("Iteration %d ...\n", i);
-      printf("Log Likelihood %lf\n", newLogLikelihood);
+      printf("Log Likelihood %.10lf\n", newLogLikelihood);
 
       if (i!=0 && fabs(newLogLikelihood-oldLogLikelihood)<convergence)
       {
@@ -216,8 +245,8 @@ lda_model_t* lda_create(int ntopics, double alpha, double beta, corpus_t *c)
     die("Error allocating memory creating LDA model!");
 
   m->num_topics = ntopics;
-  m->alpha = alpha / ntopics;
-  m->beta = beta / c->num_terms;
+  m->alpha = alpha;
+  m->beta = beta;
   m->num_terms = c->num_terms;
 
   m->log_prob_w = malloc(sizeof(double *) * m->num_terms);
