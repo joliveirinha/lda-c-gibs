@@ -153,9 +153,9 @@ static void lda_gibbs_sampling(lda_model_t *model, corpus_t *c,
         stats->nz[z]++;
         stats->ndz[i][z]++;
         stats->nzw[z][word]++;
+        
+        word_index++;
       }
-
-      word_index++;
     }
   }
 
@@ -217,6 +217,8 @@ static void lda_gibbs_sampling(lda_model_t *model, corpus_t *c,
           // sample new topic
           z = random_multinomial(local_z, model->num_topics, sum);
 
+          stats->topic[j][word_index] = z;
+          
           stats->nz[z]++;
           stats->ndz[j][z]++;
           stats->nzw[z][word]++;
