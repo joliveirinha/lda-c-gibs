@@ -91,7 +91,7 @@ static double lda_loglikelihood(lda_model_t *model, lda_suffstats_t *stats,
       if (stats->ndz[i][j] == 0)
         continue;
 
-      lik += log_gamma(model->alpha * stats->ndz[i][j]) -
+      lik += log_gamma(model->alpha + stats->ndz[i][j]) -
              log_gamma(model->alpha);
       
     }
@@ -99,7 +99,6 @@ static double lda_loglikelihood(lda_model_t *model, lda_suffstats_t *stats,
     lik -= log_gamma(model->alpha*model->num_topics + c->docs[i].total);
   }
 
-  printf("%lf\n", lik);
   lik += stats->num_docs * log_gamma(model->alpha*model->num_topics);
   
 
@@ -125,12 +124,12 @@ static double lda_loglikelihood(lda_model_t *model, lda_suffstats_t *stats,
 
 static void lda_gibbs_sampling(lda_model_t *model, corpus_t *c, 
                                int max_iter, int interval,
-                               double convergence) 
+                               double cthreshold) 
 {
   int i, j, k, l, p;
   int word, z, word_index;
   double oldLogLikelihood, newLogLikelihood;
-  double sum;
+  double sum, converged;
 
   double local_z[model->num_topics];
 
@@ -165,14 +164,16 @@ static void lda_gibbs_sampling(lda_model_t *model, corpus_t *c,
    */
   for (i=0;i<max_iter;i++)
   {
-    if (interval>=0 && i % interval==0)
+    if (interval>=0 && i!=0 && i % interval==0)
     {
       newLogLikelihood = lda_loglikelihood(model, stats, c);
 
       printf("Iteration %d ...\n", i);
       printf("Log Likelihood %.10lf\n", newLogLikelihood);
-
-      if (i!=0 && fabs(newLogLikelihood-oldLogLikelihood)<convergence)
+      
+      converged = fabs(newLogLikelihood - oldLogLikelihood) / oldLogLikelihood;
+      printf("%lf\n", converged);
+      if (i>interval && converged<cthreshold)
       {
         printf("Stoping after convergence met...");
         break;
