@@ -2,25 +2,14 @@
 #include "cokus.h"
 #include "distributions.h"
 
-#define myrand() ((double) ( randomMT() / 4294967296.))
-
-double random_uniform()
+int random_multinomial(double *p, double sum)
 {
-  return myrand();
-}
-
-int random_multinomial(double *p, int n, double sum)
-{
-  int i;
-  double r = random_uniform();
+  int i=0;
+  double r = random_uniform() * sum;
   
-  for (i=0;i<n;i++)
-  {
-    r -= p[i]/sum;
-    if (r<=0)
-      break;
-  }
+  while (r>0.0)
+    r -= p[i++];
 
-  return i;
+  return i-1;
 }
 

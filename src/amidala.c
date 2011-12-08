@@ -1,8 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 #include "amidala.h"
 #include "corpus.h"
+#include "cokus.h"
 
 #define MAX_USAGE_STR 200
 #define MIN_NUM_ARGS 7
@@ -30,7 +32,11 @@ static void print_lda_topics(lda_model_t *model, int topn)
 
 int main(int argc, char **argv) 
 {
-  
+  long t1;
+
+  (void) time(&t1);
+  seedMT(t1);
+
   if (argc<=MIN_NUM_ARGS)
     usage();
 

@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <time.h>
+#include <assert.h>
 
 #include "lda.h"
 #include "utils.h"
@@ -171,23 +173,65 @@ static double lda_loglikelihood(lda_model_t *model, lda_suffstats_t *stats,
   return lik;
 }
 
-static void lda_gibbs_sampling(lda_model_t *model, corpus_t *c, 
-                               int max_iter, int interval,
-                               double cthreshold) 
+static void lda_sample_doc(lda_model_t *model, lda_suffstats_t *stats, 
+                           document_t *d, int j) 
 {
-  int i, j, k, l, p;
-  int word, z, word_index;
-  double oldLogLikelihood, newLogLikelihood, perplexity;
-  double sum, converged;
-
+  int l, p, k, z;
+  int word, word_index = 0;
+  double sum;
   double local_z[model->num_topics];
 
-  lda_suffstats_t *stats = lda_create_suffstats(model, c);
-  
-  /*
-   * initialization
-   * randonmly make topic assigments to each word in the corpus
-   */
+  for (l=0;l<d->length;l++)
+  {
+    // we need to do this for every repetition 
+    // of the word
+    word = d->words[l].id;
+    for (p=0;p<d->words[l].count;p++) 
+    {
+
+      z = stats->topic[j][word_index];
+      // remove this topic assigment from the statistics and model 
+      // the new probability
+      stats->nz[z]--;
+      stats->ndz[j][z]--;
+      stats->nzw[z][word]--;
+      
+      // now model the conditional probability of z=k 
+      sum = 0;
+      for (k=0;k<model->num_topics;k++) 
+      {
+        local_z[k] = (stats->ndz[j][k] + model->alpha[k]) *
+                    ((stats->nzw[k][word] + model->beta) /
+                    (stats->nz[k]+model->betaSum));
+        sum += local_z[k];
+      }
+
+      /* sample a new topic for this word from the new distribution
+       * and update the new stats with this new topic
+       */
+      
+      // sample new topic
+      z = random_multinomial(local_z, sum);
+
+      stats->topic[j][word_index] = z;
+      
+      stats->nz[z]++;
+      stats->ndz[j][z]++;
+      stats->nzw[z][word]++;
+      
+      // increment word index (needed because on how we organize
+      // memory
+      word_index++;
+    }
+  }
+}
+
+static void lda_gibbs_initialize(lda_model_t *model, corpus_t *c,
+                                 lda_suffstats_t *stats) 
+{
+  int i, j, k, z;
+  int word, word_index;
+
   for (i=0;i<c->num_docs;i++)
   {
     word_index = 0;
@@ -207,13 +251,33 @@ static void lda_gibbs_sampling(lda_model_t *model, corpus_t *c,
       }
     }
   }
+}
 
+static void lda_gibbs_sampling(lda_model_t *model, corpus_t *c, 
+                               int max_iter, int interval,
+                               double cthreshold) 
+{
+  int i, j, k, l, p;
+  int word, z, word_index;
+  double oldLogLikelihood, newLogLikelihood, perplexity;
+  double converged;
+
+
+  lda_suffstats_t *stats = lda_create_suffstats(model, c);
+  
+  /*
+   * initialization
+   * randonmly make topic assigments to each word in the corpus
+   */
+
+  lda_gibbs_initialize(model, c, stats);
 
   /* Now we start by gibbs sampling until all iterations are 
    * computed
    */
   for (i=0;i<max_iter;i++)
   {
+
     if (interval>=0 && i!=0 && i % interval==0)
     {
       newLogLikelihood = lda_loglikelihood(model, stats, c);
@@ -234,54 +298,15 @@ static void lda_gibbs_sampling(lda_model_t *model, corpus_t *c,
       oldLogLikelihood = newLogLikelihood;
     }
 
+    clock_t start = clock();
     for (j=0;j<c->num_docs;j++) 
     {
-      
-      word_index = 0;
-      for (l=0;l<c->docs[j].length;l++)
-      {
-        // we need to do this for every repetition 
-        // of the word
-        word = c->docs[j].words[l].id;
-        for (p=0;p<c->docs[j].words[l].count;p++) 
-        {
-
-          z = stats->topic[j][word_index];
-          // remove this topic assigment from the statistics and model 
-          // the new probability
-          stats->nz[z]--;
-          stats->ndz[j][z]--;
-          stats->nzw[z][word]--;
-          
-          // now model the conditional probability of z=k 
-          sum = 0;
-          for (k=0;k<model->num_topics;k++) 
-          {
-            local_z[k] = (stats->ndz[j][k] + model->alpha[k]) *
-                        ((stats->nzw[k][word] + model->beta) /
-                        (stats->nz[k]+model->betaSum));
-            sum += local_z[k];
-          }
-
-          /* sample a new topic for this word from the new distribution
-           * and update the new stats with this new topic
-           */
-          
-          // sample new topic
-          z = random_multinomial(local_z, model->num_topics, sum);
-
-          stats->topic[j][word_index] = z;
-          
-          stats->nz[z]++;
-          stats->ndz[j][z]++;
-          stats->nzw[z][word]++;
-          
-          // increment word index (needed because on how we organize
-          // memory
-          word_index++;
-        }
-      }
+      lda_sample_doc(model, stats, &(c->docs[j]), j);
     }
+
+    clock_t end = clock();
+    double t = (end-start)/(CLOCKS_PER_SEC/1000.);
+    printf("Time spent per iteration %dms\n", (int)t); 
   }
 
   lda_destroy_suffstats(stats);
@@ -459,9 +484,9 @@ lda_model_t* lda_load_model(char *filename)
 
   FILE *f = fopen(filename, "rb");
 
-  fread(&ntopics, sizeof(int), 1, f);
-  fread(&nterms, sizeof(int), 1, f);
-  fread(&beta, sizeof(double), 1, f);
+  assert(fread(&ntopics, sizeof(int), 1, f)==1);
+  assert(fread(&nterms, sizeof(int), 1, f)==1);
+  assert(fread(&beta, sizeof(double), 1, f)==1);
 
   // we parameter alpha is only used when the model is being
   // created for the first time.
@@ -469,8 +494,9 @@ lda_model_t* lda_load_model(char *filename)
   // of the model in the next step
   lda_model_t *m = lda_create(ntopics, nterms, 0, beta);
   
-  fread(m->alpha, sizeof(double), ntopics, f);
-  fread(m->log_prob_w, sizeof(double), ntopics*nterms, f);
+  assert(fread(m->alpha, sizeof(double), ntopics, f)==ntopics);
+  assert(fread(m->log_prob_w, sizeof(double), 
+         ntopics*nterms, f)==ntopics*nterms);
 
   m->alphaSum = 0;
   for (i=0;i<ntopics;i++)

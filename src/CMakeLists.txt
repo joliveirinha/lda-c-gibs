@@ -1,5 +1,5 @@
 #general configuration
-set(CMAKE_C_FLAGS "-Wall -g")
+#set(CMAKE_C_FLAGS "-Wall -g")
 
 # library 
 set(LIBAMIDALA_SOURCES corpus.c
