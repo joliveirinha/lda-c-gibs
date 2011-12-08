@@ -88,13 +88,46 @@ static void lda_compute_log_w(lda_model_t *model, lda_suffstats_t *stats)
  * Auxiliary functions for this module
  */
 
+static double lda_perplexity(lda_model_t *model, lda_suffstats_t *stats,
+                             corpus_t *c)
+{
+  int i, j, k;
+  int word_index, word, tw=0;
+  double tmp, px = 0;
+
+  for (i=0;i<c->num_docs;i++) 
+  {
+    tw += c->docs[i].total;
+    word_index = 0;
+    for (j=0;j<c->docs[i].length;j++)
+    {
+      word = c->docs[i].words[j].id;
+      tmp = 0;
+      for (k=0;k<model->num_topics;k++) 
+      {
+        tmp += ((stats->nzw[k][word]+model->beta)/
+                (stats->nz[k]+model->betaSum)) *
+              (stats->ndz[i][k]+model->alpha[k]/
+               (c->docs[i].total+model->alphaSum));
+      }
+      
+      px += log(tmp) * c->docs[i].words[j].count;
+      word_index++;
+    }
+  }
+  
+  px = exp(-(1./tw) * px);
+
+  return px;
+}
+
 static double lda_loglikelihood(lda_model_t *model, lda_suffstats_t *stats,
                                 corpus_t *c)
 {
   int i, j;
   double lik = 0;
-  int nonZeroTypeTopics = 0;
   double topic_gammas[model->num_topics];
+  int nonZeroTypeTopics = 0;
 
   for (i=0;i<model->num_topics;i++)
     topic_gammas[i] = log_gamma(model->alpha[i]);
@@ -104,7 +137,8 @@ static double lda_loglikelihood(lda_model_t *model, lda_suffstats_t *stats,
   {
     for (j=0;j<model->num_topics;j++) 
     {
-      if (stats->ndz[i][j] == 0)
+      // if it zero then the following equation will be zero
+      if (stats->ndz[i][j]==0)
         continue;
 
       lik += log_gamma(model->alpha[j] + stats->ndz[i][j]) -
@@ -114,7 +148,6 @@ static double lda_loglikelihood(lda_model_t *model, lda_suffstats_t *stats,
     
     lik -= log_gamma(model->alphaSum + c->docs[i].total);
   }
-
   lik += stats->num_docs * log_gamma(model->alphaSum);
 
   // direchlet of the topics 
@@ -131,8 +164,9 @@ static double lda_loglikelihood(lda_model_t *model, lda_suffstats_t *stats,
 
     lik -= log_gamma(model->beta*model->num_topics + stats->nz[i]);
   }
+
   lik += log_gamma(model->beta * model->num_topics) - 
-         log_gamma(model->beta) * nonZeroTypeTopics;
+          log_gamma(model->beta) * nonZeroTypeTopics;
 
   return lik;
 }
@@ -143,7 +177,7 @@ static void lda_gibbs_sampling(lda_model_t *model, corpus_t *c,
 {
   int i, j, k, l, p;
   int word, z, word_index;
-  double oldLogLikelihood, newLogLikelihood;
+  double oldLogLikelihood, newLogLikelihood, perplexity;
   double sum, converged;
 
   double local_z[model->num_topics];
@@ -183,9 +217,11 @@ static void lda_gibbs_sampling(lda_model_t *model, corpus_t *c,
     if (interval>=0 && i!=0 && i % interval==0)
     {
       newLogLikelihood = lda_loglikelihood(model, stats, c);
+      perplexity = lda_perplexity(model, stats, c);
 
-      printf("Iteration %d...\n", i);
-      printf("Log Likelihood = %10.8lf\n", newLogLikelihood);
+      printf("Iteration %5d: ", i);
+      printf("Log Likelihood = %10.2lf | Perplexity = %8.2lf\n",
+              newLogLikelihood, perplexity);
       
       converged = fabs((oldLogLikelihood - newLogLikelihood) / oldLogLikelihood);
       if (i>interval && converged<cthreshold)

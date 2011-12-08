@@ -1,18 +1,29 @@
 #include <math.h>
 
-#include "dirichlet.h"
+#define HALF_LOG_TWO_PI 0.9189385332046726695409688545623794198036193
 
-double log_gamma(double x)
+double log_gamma(double z)
 {
-  double z=1/(x*x);
+  double result;
+  int shift = 0;
 
-  x=x+6;
-  z=(((-0.000595238095238*z+0.000793650793651)
-    *z-0.002777777777778)*z+0.083333333333333)/x;
-   
-  z=(x-0.5)*log(x)-x+0.918938533204673+z-log(x-1)-
-    log(x-2)-log(x-3)-log(x-4)-log(x-5)-log(x-6);
+  while (z<2) 
+  {
+    z++;
+    shift++;
+  }
+
+  result = HALF_LOG_TWO_PI+(z-0.5)*log(z)-z+
+           1/(12*z)-1/(360*z*z*z)+1/(1260*z*z*z*z*z);
+
+  while (shift > 0)
+  {
+    shift--;
+    z--;
+    result -= log(z);
+  }
   
-  return z;
+  return result;
 }
+
 
