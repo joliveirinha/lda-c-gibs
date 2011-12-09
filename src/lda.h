@@ -8,7 +8,7 @@
 typedef struct _lda_suffstats_st {
   int *nz; // number of times the topic appears in the corpus
   int **ndz; // number of times that topic z appears in document d
-  int **nzw; // number of times that topic z appears with word w
+  int **nwz; // number of times that topic z appears with word w
 
   int **topic; // topic assigments for word w in document d
   

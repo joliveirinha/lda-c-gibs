@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#include <time.h>
 #include <assert.h>
 
 #include "lda.h"
@@ -28,10 +27,10 @@ static lda_suffstats_t* lda_create_suffstats(lda_model_t *m, corpus_t *c)
 
   stats->nz = calloc(m->num_topics, sizeof(int));
   stats->ndz = malloc(sizeof(int *) * c->num_docs);
-  stats->nzw = malloc(sizeof(int *) * m->num_topics);
+  stats->nwz = malloc(sizeof(int *) * m->num_terms);
   stats->topic = malloc(sizeof(int *) * c->num_docs);
 
-  if (!stats->ndz || !stats->nzw || !stats->topic)
+  if (!stats->ndz || !stats->nwz || !stats->topic)
     die("Error allocating memory for sufficent statistics");
 
   for (i=0;i<c->num_docs;i++)
@@ -43,17 +42,17 @@ static lda_suffstats_t* lda_create_suffstats(lda_model_t *m, corpus_t *c)
       die("Error allocating memory for stats in step 2!");
   }
 
-  for (i=0;i<m->num_topics;i++)
+  for (i=0;i<m->num_terms;i++)
   {
-    stats->nzw[i] = calloc(m->num_terms, sizeof(int)); 
-    if (!stats->nzw[i])
+    stats->nwz[i] = calloc(m->num_topics, sizeof(int)); 
+    if (!stats->nwz[i])
       die("Die error allocating memory for stats in step 3!");
   }
 
   return stats;
 }
 
-static void lda_destroy_suffstats(lda_suffstats_t *stats)
+static void lda_destroy_suffstats(lda_suffstats_t *stats, lda_model_t *m)
 {
   int i;
 
@@ -65,9 +64,9 @@ static void lda_destroy_suffstats(lda_suffstats_t *stats)
   free(stats->ndz);
   free(stats->topic);
 
-  for (i=0;i<stats->num_topics;i++)
-    free(stats->nzw[i]); 
-  free(stats->nzw);
+  for (i=0;i<m->num_terms;i++)
+    free(stats->nwz[i]); 
+  free(stats->nwz);
 
   free(stats->nz);
   free(stats);
@@ -81,7 +80,7 @@ static void lda_compute_log_w(lda_model_t *model, lda_suffstats_t *stats)
   {
     for (j=0;j<model->num_terms;j++) 
     {
-      model->log_prob_w[i][j] = log(stats->nzw[i][j] / stats->nz[i]); 
+      model->log_prob_w[i][j] = log(stats->nwz[j][i] / stats->nz[i]); 
     }
   }
 }
@@ -107,7 +106,7 @@ static double lda_perplexity(lda_model_t *model, lda_suffstats_t *stats,
       tmp = 0;
       for (k=0;k<model->num_topics;k++) 
       {
-        tmp += ((stats->nzw[k][word]+model->beta)/
+        tmp += ((stats->nwz[word][k]+model->beta)/
                 (stats->nz[k]+model->betaSum)) *
               (stats->ndz[i][k]+model->alpha[k]/
                (c->docs[i].total+model->alphaSum));
@@ -157,11 +156,11 @@ static double lda_loglikelihood(lda_model_t *model, lda_suffstats_t *stats,
   {
     for (j=0;j<model->num_terms;j++) 
     {
-      if (stats->nzw[i][j]==0)
+      if (stats->nwz[j][i]==0)
         continue;
 
       nonZeroTypeTopics++;
-      lik += log_gamma(model->beta + stats->nzw[i][j]);
+      lik += log_gamma(model->beta + stats->nwz[j][i]);
     }
 
     lik -= log_gamma(model->beta*model->num_topics + stats->nz[i]);
@@ -194,15 +193,20 @@ static void lda_sample_doc(lda_model_t *model, lda_suffstats_t *stats,
       // the new probability
       stats->nz[z]--;
       stats->ndz[j][z]--;
-      stats->nzw[z][word]--;
+      stats->nwz[word][z]--;
       
       // now model the conditional probability of z=k 
       sum = 0;
       for (k=0;k<model->num_topics;k++) 
       {
-        local_z[k] = (stats->ndz[j][k] + model->alpha[k]) *
-                    ((stats->nzw[k][word] + model->beta) /
-                    (stats->nz[k]+model->betaSum));
+        /* this is the inner loop where all the heavy computation
+         * is done. The division is made this way because it is faster
+         * than doing it directly 
+         */
+        local_z[k] = (model->alpha[k] + stats->ndz[j][k]) *
+                     ((model->beta + stats->nwz[word][k]) * 
+                      (1./(stats->nz[k] + model->betaSum)));
+        
         sum += local_z[k];
       }
 
@@ -217,7 +221,7 @@ static void lda_sample_doc(lda_model_t *model, lda_suffstats_t *stats,
       
       stats->nz[z]++;
       stats->ndz[j][z]++;
-      stats->nzw[z][word]++;
+      stats->nwz[word][z]++;
       
       // increment word index (needed because on how we organize
       // memory
@@ -245,7 +249,7 @@ static void lda_gibbs_initialize(lda_model_t *model, corpus_t *c,
         
         stats->nz[z]++;
         stats->ndz[i][z]++;
-        stats->nzw[z][word]++;
+        stats->nwz[word][z]++;
         
         word_index++;
       }
@@ -298,18 +302,13 @@ static void lda_gibbs_sampling(lda_model_t *model, corpus_t *c,
       oldLogLikelihood = newLogLikelihood;
     }
 
-    clock_t start = clock();
     for (j=0;j<c->num_docs;j++) 
     {
       lda_sample_doc(model, stats, &(c->docs[j]), j);
     }
-
-    clock_t end = clock();
-    double t = (end-start)/(CLOCKS_PER_SEC/1000.);
-    printf("Time spent per iteration %dms\n", (int)t); 
   }
 
-  lda_destroy_suffstats(stats);
+  lda_destroy_suffstats(stats, model);
 }
 
 /* 
