@@ -261,8 +261,7 @@ static void lda_gibbs_sampling(lda_model_t *model, corpus_t *c,
                                int max_iter, int interval,
                                double cthreshold) 
 {
-  int i, j, k, l, p;
-  int word, z, word_index;
+  int i, j;
   double oldLogLikelihood, newLogLikelihood, perplexity;
   double converged;
 
@@ -279,6 +278,7 @@ static void lda_gibbs_sampling(lda_model_t *model, corpus_t *c,
   /* Now we start by gibbs sampling until all iterations are 
    * computed
    */
+  oldLogLikelihood = 0;
   for (i=0;i<max_iter;i++)
   {
 
@@ -480,7 +480,8 @@ lda_model_t* lda_load_model(char *filename)
   double beta;
   int ntopics, nterms;
   int i;
-
+  
+  ntopics = nterms = beta = 0;
   FILE *f = fopen(filename, "rb");
 
   assert(fread(&ntopics, sizeof(int), 1, f)==1);

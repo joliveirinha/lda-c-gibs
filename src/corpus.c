@@ -4,6 +4,7 @@
 
 #include "corpus.h"
 #include "amidala.h"
+#include "utils.h"
 
 corpus_t* corpus_create()
 {
