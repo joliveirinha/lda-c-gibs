@@ -260,8 +260,8 @@ static void lda_gibbs_initialize(lda_model_t *model, corpus_t *c,
   }
 }
 
-static void lda_gibbs_sampling(lda_model_t *model, corpus_t *c, 
-                               int max_iter, int interval,
+static void lda_gibbs_sampling(lda_model_t *model, lda_suffstats_t *stats,
+                               corpus_t *c, int max_iter, int interval,
                                double cthreshold) 
 {
   int i, j;
@@ -269,16 +269,7 @@ static void lda_gibbs_sampling(lda_model_t *model, corpus_t *c,
   double converged;
 
 
-  lda_suffstats_t *stats = lda_create_suffstats(model, c);
-  
-  /*
-   * initialization
-   * randonmly make topic assigments to each word in the corpus
-   */
-
-  lda_gibbs_initialize(model, c, stats);
-
-  /* Now we start by gibbs sampling until all iterations are 
+    /* Now we start by gibbs sampling until all iterations are 
    * computed
    */
   oldLogLikelihood = 0;
@@ -298,8 +289,6 @@ static void lda_gibbs_sampling(lda_model_t *model, corpus_t *c,
       if (i>interval && converged<cthreshold)
       {
         printf("Stoping after convergence met...\n");
-        lda_compute_log_w(model, stats);
-        lda_print_top_words(model, DEFAULT_TOP_N, stdout);
         break;
       }
       
@@ -311,8 +300,6 @@ static void lda_gibbs_sampling(lda_model_t *model, corpus_t *c,
       lda_sample_doc(model, stats, &(c->docs[j]), j);
     }
   }
-
-  lda_destroy_suffstats(stats, model);
 }
 
 /* 
@@ -371,7 +358,24 @@ void lda_destroy(lda_model_t *model)
 void lda_estimate(lda_model_t *model, corpus_t *c, int max_iter,
                   int interval, double convergence)
 {
-  lda_gibbs_sampling(model, c, max_iter, interval, convergence);
+  
+  lda_suffstats_t *stats = lda_create_suffstats(model, c);
+  
+  /*
+   * initialization
+   * randonmly make topic assigments to each word in the corpus
+   */
+
+  lda_gibbs_initialize(model, c, stats);
+  lda_gibbs_sampling(model, stats, c, max_iter, interval, convergence);
+  
+  /* compute log prob w and print the top n words 
+   */
+  lda_compute_log_w(model, stats);
+  lda_print_top_words(model, DEFAULT_TOP_N, stdout);
+  lda_print_document_topics(model, stats, c, DEFAULT_TOP_N, stdout);
+
+  lda_destroy_suffstats(stats, model);
 }
 
 /* 
@@ -421,9 +425,10 @@ void lda_print_top_words(lda_model_t *model, int topn, FILE *out)
  * print the topic distribution for the documents acording to the 
  * learned model
  */
-void lda_print_document_topics(lda_model_t *model, corpus_t *c, FILE *out) 
+void lda_print_document_topics(lda_model_t *model, lda_suffstats_t *stats,
+                               corpus_t *c, int topn, FILE *out) 
 {
-  int i, j, k, wid, count;
+  int i, j;
   pair_t probs[model->num_topics];
 
   for (i=0;i<c->num_docs;i++) 
@@ -433,30 +438,15 @@ void lda_print_document_topics(lda_model_t *model, corpus_t *c, FILE *out)
     for (j=0;j<model->num_topics;j++)
     {
       probs[j].id = j;
-      probs[j].w = 0;
-    }
-
-    for (j=0;j<c->docs[i].length;j++)
-    {
-      // update the probability here.. 
-      // TODO: check if the formula is really this one
-      
-      for (k=0;k<model->num_topics;k++)
-      {
-        wid = c->docs[i].words[j].id;
-        count = c->docs[i].words[j].count;
-
-        probs[k].w = probs[k].w + model->log_prob_w[k][wid] * count;
-      }
+      probs[j].w = (stats->ndz[i][j] / (double)c->docs[i].total);
     }
 
     qsort(probs, model->num_topics, sizeof(pair_t), cmp_pairs);
-    for (j=0;j<model->num_topics;j++)
+    for (j=0;j<topn;j++)
       fprintf(out, " %d:%lf", probs[j].id, probs[j].w);
     
     fprintf(out, "\n");
   }
-
 }
 
 /*

@@ -34,7 +34,8 @@ void lda_destroy(lda_model_t *model);
 void lda_estimate(lda_model_t *model, corpus_t *corpus, int max_iter,
                   int inverval, double convergence);
 void lda_print_top_words(lda_model_t *model, int topn, FILE *out);
-void lda_print_document_topics(lda_model_t *model, corpus_t *c, FILE *out);
+void lda_print_document_topics(lda_model_t *model, lda_suffstats_t *stats,
+                               corpus_t *c, int topn, FILE *out);
 void lda_save_model(lda_model_t *m, char *filename);
 lda_model_t* lda_load_model(char *filename);
 

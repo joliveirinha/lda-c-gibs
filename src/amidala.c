@@ -27,7 +27,7 @@ static void usage()
 
 static void print_lda_topics(lda_model_t *model, int topn)
 {
-
+  lda_print_top_words(model, topn, stdout);
 }
 
 int main(int argc, char **argv) 
@@ -63,7 +63,7 @@ int main(int argc, char **argv)
   lda_model_t *model = amidala_lda(k, alpha, beta, max_iter,
                                    interval, convergence, c);
   
-  print_lda_topics(model, 5);
+  //print_lda_topics(model, 5);
 
   return 0; 
 }
