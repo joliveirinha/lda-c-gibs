@@ -8,6 +8,8 @@
 #include "distributions.h"
 #include "dirichlet.h"
 
+#define DEFAULT_TOP_N 5
+
 
 /*
  * Sufficient statistics functions
@@ -80,7 +82,8 @@ static void lda_compute_log_w(lda_model_t *model, lda_suffstats_t *stats)
   {
     for (j=0;j<model->num_terms;j++) 
     {
-      model->log_prob_w[i][j] = log(stats->nwz[j][i] / stats->nz[i]); 
+      model->log_prob_w[i][j] = log((stats->nwz[j][i]+model->beta) *
+                  (1.0/(stats->nz[i] + model->betaSum))); 
     }
   }
 }
@@ -296,6 +299,7 @@ static void lda_gibbs_sampling(lda_model_t *model, corpus_t *c,
       {
         printf("Stoping after convergence met...\n");
         lda_compute_log_w(model, stats);
+        lda_print_top_words(model, DEFAULT_TOP_N, stdout);
         break;
       }
       
@@ -379,16 +383,17 @@ typedef struct _pair_st {
   double w;
 } pair_t;
 
+/* order pairs in decrescent order */
 static int cmp_pairs(const void *a, const void *b)
 {
   pair_t *pa = (pair_t *)a;
   pair_t *pb = (pair_t *)b;
 
   if (pa->w < pb->w)
-    return -1;
+    return 1;
   else if (pa->w == pb->w)
     return 0;
-  else return 1;
+  else return -1;
 }
 
 void lda_print_top_words(lda_model_t *model, int topn, FILE *out) 
